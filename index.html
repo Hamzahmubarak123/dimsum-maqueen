@@ -50,107 +50,112 @@
     }
     .welcome-overlay.show { opacity: 1; pointer-events: all; }
 
-    /* Container: slide naik dari bawah */
+    /* Container: seluruh popup, slide naik dari bawah */
     .welcome-container {
       width: 100%; max-width: 480px;
-      display: flex; flex-direction: row; align-items: flex-end;
-      transform: translateY(120px);
+      display: flex;
+      flex-direction: row;
+      align-items: flex-end;
+      /* Tidak ada padding — maskot mepet tepi kanan */
+      transform: translateY(140px);
       transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .welcome-overlay.show .welcome-container { transform: translateY(0); }
 
-    /* Bubble dialog — kiri */
+    /* ── BUBBLE — compact, lebar terbatas ── */
     .welcome-bubble {
-      flex: 1; min-width: 0;
+      /* Lebar fixed, bukan flex — supaya tidak makan terlalu banyak ruang */
+      width: 195px;
+      flex-shrink: 0;
       background: #fff;
-      border-radius: 20px 20px 20px 4px; /* lancip kiri-bawah arah maskot */
-      padding: 18px 20px 20px;
-      margin: 0 0 36px 16px;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.1);
-      border: 2px solid rgba(255,255,255,0.9);
-      /* Animasi masuk */
+      border-radius: 16px 16px 16px 4px;
+      padding: 13px 14px 14px;
+      margin: 0 0 44px 14px;
+      box-shadow: 0 10px 32px rgba(0,0,0,0.22), 0 2px 6px rgba(0,0,0,0.1);
+      border: 2px solid rgba(255,255,255,0.95);
+      position: relative;
       opacity: 0;
-      transform: translateY(16px) scale(0.94);
+      transform: translateY(14px) scale(0.93);
       transform-origin: bottom left;
       transition: opacity 0.4s ease 0.28s,
                   transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0.28s;
     }
     .welcome-overlay.show .welcome-bubble { opacity: 1; transform: translateY(0) scale(1); }
 
-    /* Ekor speech bubble — lancip di kanan-bawah, menunjuk ke maskot */
+    /* Ekor bubble menunjuk ke kanan-bawah arah maskot */
     .welcome-bubble::after {
       content: '';
       position: absolute;
-      bottom: -14px; right: -2px;
+      bottom: -13px; right: -1px;
       width: 0; height: 0;
       border-style: solid;
-      border-width: 14px 0 0 16px;
+      border-width: 13px 0 0 15px;
       border-color: transparent transparent transparent #fff;
-      filter: drop-shadow(2px 3px 2px rgba(0,0,0,0.08));
     }
 
-    /* Name tag maskot */
+    /* Name tag */
     .welcome-nametag {
-      display: inline-flex; align-items: center; gap: 5px;
+      display: inline-flex; align-items: center; gap: 4px;
       background: var(--red); color: #fff;
-      font-family: 'Sora', sans-serif; font-size: 10px; font-weight: 800;
-      padding: 3px 10px; border-radius: 20px; margin-bottom: 10px;
-      box-shadow: 0 3px 10px rgba(184,33,34,0.3);
+      font-family: 'Sora', sans-serif; font-size: 9px; font-weight: 800;
+      padding: 3px 8px; border-radius: 20px; margin-bottom: 8px;
+      box-shadow: 0 2px 8px rgba(184,33,34,0.3);
     }
     .welcome-nametag::before { content: '💬 '; }
 
     .welcome-bubble p {
-      font-size: 14px; color: var(--dark); line-height: 1.6;
+      /* Lebih kecil supaya tidak makan ruang */
+      font-size: 12px; color: var(--dark); line-height: 1.55;
       font-family: 'Sora', sans-serif; font-weight: 600;
-      margin-bottom: 16px;
+      margin-bottom: 11px;
     }
     .welcome-bubble strong { color: var(--red); font-weight: 800; }
 
-    /* Maskot — BESAR, kanan, tidak crop */
+    /* ── MASKOT — mengambil sisa ruang, BESAR ── */
     .welcome-mascot {
-      width: 200px;       /* besar tapi tidak melewati setengah layar 480px */
-      flex-shrink: 0;
+      /* flex:1 supaya maskot mengisi sisa ruang setelah bubble */
+      flex: 1;
+      min-width: 0;
       align-self: flex-end;
       position: relative; z-index: 2;
-      margin-bottom: 0; margin-right: 0;
-      /* Animasi masuk dari bawah, sedikit lebih awal dari bubble */
+      margin-bottom: 0;
       opacity: 0;
-      transform: translateY(40px) scale(0.9);
-      transition: opacity 0.5s ease 0.1s,
-                  transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s;
+      transform: translateY(40px) scale(0.88);
+      transition: opacity 0.5s ease 0.08s,
+                  transform 0.58s cubic-bezier(0.34, 1.56, 0.64, 1) 0.08s;
     }
     .welcome-overlay.show .welcome-mascot {
       opacity: 1; transform: translateY(0) scale(1);
     }
 
-    /* Gambar maskot — proporsional, tidak di-crop */
+    /* Gambar maskot — penuh lebar container-nya */
     .welcome-mascot img {
-      width: 100%; height: auto; display: block; object-fit: contain;
-      filter: drop-shadow(-5px 0 14px rgba(0,0,0,0.3))
-              drop-shadow(0 10px 20px rgba(0,0,0,0.2));
+      width: 100%; height: auto;
+      display: block; object-fit: contain;
+      filter: drop-shadow(-6px 0 16px rgba(0,0,0,0.35))
+              drop-shadow(0 12px 22px rgba(0,0,0,0.2));
       animation: floatMascot 3.5s ease-in-out infinite;
     }
 
-    /* Fallback emoji — muncul kalau gambar gagal load */
+    /* Fallback emoji */
     .welcome-mascot-fallback {
       width: 100%; aspect-ratio: 1;
       display: flex; align-items: center; justify-content: center;
-      font-size: 100px; /* emoji besar */
+      font-size: 120px;
       animation: floatMascot 3.5s ease-in-out infinite;
-      /* Disembunyikan by default, muncul via JS kalau img error */
     }
 
     /* Tombol */
     .btn-welcome {
       width: 100%; background: var(--red); color: #fff; border: none;
-      padding: 13px 16px; border-radius: 12px;
-      font-weight: 800; font-size: 14px;
+      padding: 11px 12px; border-radius: 10px;
+      font-weight: 800; font-size: 12px;
       font-family: 'Sora', sans-serif; cursor: pointer;
-      box-shadow: 0 4px 16px rgba(184,33,34,0.35);
-      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 4px 14px rgba(184,33,34,0.35);
+      transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     @media(hover:hover){
-      .btn-welcome:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(184,33,34,0.45); }
+      .btn-welcome:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(184,33,34,0.45); }
     }
     .btn-welcome:active { transform: scale(0.95); }
 
