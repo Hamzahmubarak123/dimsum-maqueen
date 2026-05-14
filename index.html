@@ -611,35 +611,141 @@ const DELIVERY_METHODS = [
 ]
 const EMOJIS = ['🥟','🍜','🥢','🍱','🧆','🍤','🦐','🫕']
 
-const DEF_SETTINGS = {
-  main_title: 'Dimsum MaQueen',
-  subtitle:   'Lembut, kenyal, dan lezat!',
-  logo_url:   '',
-  wa_number:  '81234567890',
-  admin_pw:   'admin123',
+/* ═══════════════════════════════════════════════════
+   SUPABASE CONFIG
+═══════════════════════════════════════════════════ */
+const SB_URL = 'https://jtpovbiladtkbfukphvk.supabase.co'
+const SB_KEY = 'sb_publishable_b4KhuRKBX6RFTVIRFj1Vig_bHOT2Wza'
+
+// Helper: fetch dari Supabase REST API
+async function sbFetch(table, options={}){
+  const {method='GET', filter='', body=null, select='*'} = options
+  const url = `${SB_URL}/rest/v1/${table}?${select!=='*'?'select='+select:'select=*'}${filter?'&'+filter:''}`
+  const res = await fetch(url, {
+    method,
+    headers:{
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer '+SB_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': method==='POST'?'return=representation':'return=representation'
+    },
+    body: body ? JSON.stringify(body) : null
+  })
+  if(!res.ok){
+    const err = await res.text()
+    throw new Error(`Supabase error: ${res.status} ${err}`)
+  }
+  const text = await res.text()
+  return text ? JSON.parse(text) : []
 }
-const DEF_CATEGORIES = [
-  {id:'c1', name:'Main Menu',   sort_order:1},
-  {id:'c2', name:'Paket Hemat', sort_order:2},
-]
-const DEF_PRODUCTS = [
-  {id:'p1',category_id:'c1',name:'Dimsum Ayam Original',price:25000,discount_price:null,  variant:'Isi 3', image_url:'',is_available:true, is_featured:false,sort_order:1},
-  {id:'p2',category_id:'c1',name:'Dimsum Mentai Cheese',price:35000,discount_price:30000, variant:'Isi 3', image_url:'',is_available:true, is_featured:false,sort_order:2},
-  {id:'p3',category_id:'c1',name:'Dimsum Udang Crispy', price:38000,discount_price:null,  variant:'Isi 4', image_url:'',is_available:true, is_featured:false,sort_order:3},
-  {id:'p4',category_id:'c2',name:'Dimsum Party Mix 🎉', price:85000,discount_price:75000, variant:'Isi 12',image_url:'',is_available:true, is_featured:true, sort_order:1},
-  {id:'p5',category_id:'c2',name:'Paket Hemat Berdua',  price:65000,discount_price:55000, variant:'Isi 8', image_url:'',is_available:true, is_featured:false,sort_order:2},
-]
 
-function loadData(key,def){try{const s=localStorage.getItem(key);return s?JSON.parse(s):JSON.parse(JSON.stringify(def))}catch{return JSON.parse(JSON.stringify(def))}}
-function saveData(key,val){try{localStorage.setItem(key,JSON.stringify(val))}catch{}}
+async function sbInsert(table, data){ return sbFetch(table,{method:'POST',body:data}) }
+async function sbUpdate(table, id, data){ return sbFetch(table,{method:'PATCH',filter:`id=eq.${id}`,body:data}) }
+async function sbDelete(table, id){ return sbFetch(table,{method:'DELETE',filter:`id=eq.${id}`}) }
+async function sbSelect(table, filter=''){ return sbFetch(table,{filter}) }
 
-let settings   = loadData('mq_settings',   DEF_SETTINGS)
-let categories = loadData('mq_categories', DEF_CATEGORIES)
-let products   = loadData('mq_products',   DEF_PRODUCTS)
+// Upload gambar ke Supabase Storage
+async function uploadImage(base64DataUrl, folder='products'){
+  if(!base64DataUrl || !base64DataUrl.startsWith('data:')) return base64DataUrl
+  const [meta, data] = base64DataUrl.split(',')
+  const mime = meta.match(/data:(.*);/)[1]
+  const ext  = mime.split('/')[1] || 'jpg'
+  const filename = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`
+  const bytes = atob(data)
+  const arr   = new Uint8Array(bytes.length)
+  for(let i=0;i<bytes.length;i++) arr[i]=bytes.charCodeAt(i)
+  const blob = new Blob([arr],{type:mime})
+  const res = await fetch(`${SB_URL}/storage/v1/object/product-images/${filename}`,{
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':mime,'x-upsert':'true'},
+    body: blob
+  })
+  if(!res.ok) throw new Error('Upload gambar gagal: '+await res.text())
+  return `${SB_URL}/storage/v1/object/public/product-images/${filename}`
+}
 
-function saveSettings(){saveData('mq_settings',settings)}
-function saveCats()    {saveData('mq_categories',categories)}
-function saveProds()   {saveData('mq_products',products)}
+// State lokal (cache dari Supabase)
+let settings   = { main_title:'Dimsum MaQueen', subtitle:'Lembut, kenyal, dan lezat!', logo_url:'', wa_number:'81234567890', admin_pw:'admin123' }
+let categories = []
+let products   = []
+let settingsId = null
+
+// Loading state
+let isLoading = true
+
+/* ═══════════════════════════════════════════════════
+   LOAD DATA FROM SUPABASE
+═══════════════════════════════════════════════════ */
+async function loadAllData(){
+  try{
+    // Load settings
+    const sRows = await sbSelect('store_settings')
+    if(sRows.length){
+      settings   = sRows[0]
+      settingsId = sRows[0].id
+    }
+    // Load categories
+    categories = await sbSelect('categories','order=sort_order.asc')
+    // Load products
+    products   = await sbSelect('products','order=sort_order.asc')
+  }catch(err){
+    console.error('Load data error:',err)
+    // Fallback ke data default kalau Supabase error
+  }
+  isLoading = false
+}
+
+/* ═══════════════════════════════════════════════════
+   SAVE FUNCTIONS (Supabase)
+═══════════════════════════════════════════════════ */
+async function saveSettings(){
+  try{
+    if(settingsId) await sbUpdate('store_settings', settingsId, settings)
+    else {
+      const rows = await sbInsert('store_settings', settings)
+      if(rows.length) settingsId = rows[0].id
+    }
+  }catch(e){console.error('saveSettings:',e)}
+}
+
+async function saveCat(cat, isNew=false){
+  try{
+    if(isNew){ const rows=await sbInsert('categories',cat); if(rows.length)cat.id=rows[0].id }
+    else await sbUpdate('categories', cat.id, {name:cat.name, sort_order:cat.sort_order})
+  }catch(e){console.error('saveCat:',e)}
+}
+
+async function deleteCat(id){
+  try{ await sbDelete('categories',id) }catch(e){console.error('deleteCat:',e)}
+}
+
+async function saveProd(prod, isNew=false){
+  try{
+    // Upload gambar kalau ada base64 baru
+    if(prod.image_url && prod.image_url.startsWith('data:')){
+      prod.image_url = await uploadImage(prod.image_url)
+    }
+    if(isNew){
+      const {id:_,...data} = prod
+      const rows = await sbInsert('products', data)
+      if(rows.length) prod.id = rows[0].id
+    } else {
+      await sbUpdate('products', prod.id, {
+        name:prod.name, price:prod.price, discount_price:prod.discount_price,
+        variant:prod.variant, category_id:prod.category_id, image_url:prod.image_url,
+        is_available:prod.is_available, is_featured:prod.is_featured, sort_order:prod.sort_order
+      })
+    }
+  }catch(e){console.error('saveProd:',e)}
+}
+
+async function deleteProd(id){
+  try{ await sbDelete('products',id) }catch(e){console.error('deleteProd:',e)}
+}
+
+// Dummy localStorage functions (tidak dipakai lagi, Supabase yang handle)
+function saveCats(){}
+function saveProds(){}
 
 let cart={}, activeCat='all', editingId=null, editingCatId=null, prodImgData='', logoImgData=''
 
@@ -958,15 +1064,26 @@ function renderAdmin(){
       </div>`
 }
 
-function saveSettings_(){
+async function saveSettings_(){
   const title=(document.getElementById('st-title')?.value||'').trim()
   const sub2 =(document.getElementById('st-sub')?.value||'').trim()
   const wa   =(document.getElementById('st-wa')?.value||'').replace(/\D/g,'')
   const pw   =(document.getElementById('st-pw')?.value||'').trim()
   if(!title||!wa||!pw){alert('Pastikan Nama Toko, Nomor WA, dan Password sudah diisi.');return}
+
+  // Upload logo kalau ada gambar baru
+  if(logoImgData){
+    try{ settings.logo_url = await uploadImage(logoImgData,'logos') }
+    catch(e){ console.error('Logo upload error:',e) }
+  }
+
   settings.main_title=title; settings.subtitle=sub2; settings.wa_number=wa; settings.admin_pw=pw
-  if(logoImgData) settings.logo_url=logoImgData
-  saveSettings(); renderHero(); alert('✅ Pengaturan berhasil disimpan!'); logoImgData=''
+  try{
+    await saveSettings()
+    renderHero()
+    alert('✅ Pengaturan berhasil disimpan!')
+    logoImgData=''
+  }catch(e){ alert('Gagal simpan: '+e.message) }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -995,11 +1112,17 @@ function dDrop(e){
   if(e.clientY-mid>0)target.after(dSource); else target.before(dSource)
   updateDOMOrder(dSource.dataset.type, dSource.dataset.cat)
 }
-function updateDOMOrder(type, catId){
+async function updateDOMOrder(type, catId){
   if(type==='cat'){
-    document.querySelectorAll('.admin-row[data-type="cat"]').forEach((row,i)=>{const o=categories.find(c=>c.id===row.dataset.id);if(o)o.sort_order=i+1}); saveCats()
+    document.querySelectorAll('.admin-row[data-type="cat"]').forEach(async(row,i)=>{
+      const o=categories.find(c=>c.id===row.dataset.id)
+      if(o){ o.sort_order=i+1; await sbUpdate('categories',o.id,{sort_order:i+1}) }
+    })
   } else {
-    document.querySelectorAll(`.admin-row[data-type="prod"][data-cat="${catId}"]`).forEach((row,i)=>{const o=products.find(p=>p.id===row.dataset.id);if(o)o.sort_order=i+1}); saveProds()
+    document.querySelectorAll(`.admin-row[data-type="prod"][data-cat="${catId}"]`).forEach(async(row,i)=>{
+      const o=products.find(p=>p.id===row.dataset.id)
+      if(o){ o.sort_order=i+1; await sbUpdate('products',o.id,{sort_order:i+1}) }
+    })
   }
   renderCatalog(); renderTabs()
 }
@@ -1021,15 +1144,23 @@ function openCatForm(id){
     </div>`
   openSheet('form-sheet','form-backdrop')
 }
-function saveCatForm(){
+async function saveCatForm(){
   const name=(document.getElementById('catf-name')?.value||'').trim(); if(!name)return
-  if(editingCatId){const c=categories.find(x=>x.id===editingCatId);if(c)c.name=name}
-  else categories.push({id:uid(),name,sort_order:categories.reduce((m,c)=>Math.max(m,c.sort_order),0)+1})
-  saveCats(); closeSheet('form-sheet','form-backdrop'); renderAdmin(); renderCatalog(); renderTabs()
+  if(editingCatId){
+    const c=categories.find(x=>x.id===editingCatId)
+    if(c){ c.name=name; await saveCat(c) }
+  } else {
+    const newCat={id:'',name,sort_order:categories.reduce((m,c)=>Math.max(m,c.sort_order),0)+1}
+    await saveCat(newCat, true)
+    categories.push(newCat)
+  }
+  closeSheet('form-sheet','form-backdrop'); renderAdmin(); renderCatalog(); renderTabs()
 }
-function delCat(id){
+async function delCat(id){
   if(!confirm('Hapus kategori ini?'))return
-  categories=categories.filter(c=>c.id!==id); saveCats(); renderAdmin(); renderCatalog(); renderTabs()
+  await deleteCat(id)
+  categories=categories.filter(c=>c.id!==id)
+  renderAdmin(); renderCatalog(); renderTabs()
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1059,7 +1190,7 @@ function openProdForm(id){
     </div>`
   openSheet('form-sheet','form-backdrop')
 }
-function saveProdForm(){
+async function saveProdForm(){
   const name=(document.getElementById('fp-name')?.value||'').trim()
   const price=parseInt(document.getElementById('fp-price')?.value)||0
   const promo=parseInt(document.getElementById('fp-promo')?.value)||null
@@ -1068,20 +1199,54 @@ function saveProdForm(){
   const avail=document.getElementById('fp-avail')?.checked
   const featured=document.getElementById('fp-featured')?.checked
   if(!name||!price){alert('Nama dan Harga produk wajib diisi.');return}
-  if(editingId){
-    const p=products.find(x=>x.id===editingId)
-    if(p)Object.assign(p,{name,price,discount_price:promo&&promo>0?promo:null,variant,category_id:catId,is_available:avail,is_featured:featured,image_url:prodImgData||p.image_url})
-  } else {
-    products.unshift({id:uid(),name,price,discount_price:promo&&promo>0?promo:null,variant,category_id:catId,image_url:prodImgData,is_available:avail,is_featured:featured,sort_order:products.filter(x=>x.category_id===catId).reduce((m,x)=>Math.max(m,x.sort_order),0)+1})
+
+  // Disable tombol simpan sementara upload
+  const btn=document.querySelector('.btn-save')
+  if(btn){btn.textContent='⏳ Menyimpan...';btn.disabled=true}
+
+  try{
+    if(editingId){
+      const p=products.find(x=>x.id===editingId)
+      if(p){
+        Object.assign(p,{name,price,discount_price:promo&&promo>0?promo:null,variant,
+          category_id:catId,is_available:avail,is_featured:featured,
+          image_url:prodImgData||p.image_url})
+        await saveProd(p, false)
+      }
+    } else {
+      const newProd={id:'',name,price,discount_price:promo&&promo>0?promo:null,variant,
+        category_id:catId,image_url:prodImgData,is_available:avail,is_featured:featured,
+        sort_order:products.filter(x=>x.category_id===catId).reduce((m,x)=>Math.max(m,x.sort_order),0)+1}
+      await saveProd(newProd, true)
+      products.unshift(newProd)
+    }
+    closeSheet('form-sheet','form-backdrop'); renderAdmin(); renderCatalog()
+  }catch(e){
+    alert('Gagal menyimpan: '+e.message)
+    if(btn){btn.textContent='💾 Simpan';btn.disabled=false}
   }
-  saveProds(); closeSheet('form-sheet','form-backdrop'); renderAdmin(); renderCatalog()
 }
-function toggleProd(id){const p=products.find(x=>x.id===id);if(!p)return;p.is_available=!p.is_available;saveProds();renderAdmin();renderCatalog()}
-function delProd(id){if(!confirm('Hapus produk ini?'))return;products=products.filter(x=>x.id!==id);saveProds();renderAdmin();renderCatalog()}
-function resetData(){
+async function toggleProd(id){
+  const p=products.find(x=>x.id===id);if(!p)return
+  p.is_available=!p.is_available
+  await sbUpdate('products',id,{is_available:p.is_available})
+  renderAdmin();renderCatalog()
+}
+async function delProd(id){
+  if(!confirm('Hapus produk ini?'))return
+  await deleteProd(id)
+  products=products.filter(x=>x.id!==id)
+  renderAdmin();renderCatalog()
+}
+async function resetData(){
   if(!confirm('🚨 PERINGATAN!\n\nHapus SEMUA produk, kategori, dan pengaturan?\n\nTidak bisa dibatalkan!'))return
-  localStorage.removeItem('mq_settings'); localStorage.removeItem('mq_categories'); localStorage.removeItem('mq_products')
-  alert('Berhasil! Data telah di-reset.'); location.reload()
+  try{
+    // Hapus semua produk dan kategori dari Supabase
+    await sbFetch('products',{method:'DELETE',filter:'id=neq.00000000-0000-0000-0000-000000000000'})
+    await sbFetch('categories',{method:'DELETE',filter:'id=neq.00000000-0000-0000-0000-000000000000'})
+    alert('Berhasil! Data telah di-reset.')
+    location.reload()
+  }catch(e){ alert('Gagal reset: '+e.message) }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1157,14 +1322,19 @@ function closeSheet(s,b){document.getElementById(b).classList.remove('show'); do
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 
 /* ═══════════════════════════════════════════════════
-   INIT
+   INIT — Load Supabase dulu, baru render
 ═══════════════════════════════════════════════════ */
-renderHero()
-renderTabs()
-renderCatalog()
-updateCartBar()
-checkWelcome()
-if(sessionStorage.getItem('mq_auth')==='1') renderAdmin()
+// Tampilkan loading sementara Supabase load
+document.getElementById('hero-title').textContent = 'Loading…'
+
+loadAllData().then(()=>{
+  renderHero()
+  renderTabs()
+  renderCatalog()
+  updateCartBar()
+  checkWelcome()
+  if(sessionStorage.getItem('mq_auth')==='1') renderAdmin()
+})
 </script>
 </body>
 </html>
