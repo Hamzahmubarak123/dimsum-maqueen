@@ -708,12 +708,23 @@ async function saveSettings(){
   }catch(e){console.error('saveSettings:',e)}
 }
 
-async function saveCat(cat, isNew=false){
-  try{
-    if(isNew){ const rows=await sbInsert('categories',cat); if(rows.length)cat.id=rows[0].id }
-    else await sbUpdate('categories', cat.id, {name:cat.name, sort_order:cat.sort_order})
-  }catch(e){console.error('saveCat:',e)}
-}
+async function saveCat(cat, isNew = false) {
+        try {
+          if (isNew) {
+            // Hapus 'id' kosong agar Supabase yang membuatkannya otomatis
+            const { id: _, ...dataCat } = cat; 
+            const rows = await sbInsert('categories', dataCat);
+            if (rows.length) cat.id = rows[0].id;
+          } else {
+            await sbUpdate('categories', cat.id, {
+              name: cat.name,
+              sort_order: cat.sort_order,
+            });
+          }
+        } catch (e) {
+          console.error('saveCat:', e);
+        }
+      }
 
 async function deleteCat(id){
   try{ await sbDelete('categories',id) }catch(e){console.error('deleteCat:',e)}
