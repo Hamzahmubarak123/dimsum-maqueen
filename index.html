@@ -2719,9 +2719,10 @@
             msgLines.push(`⚠️ Saya akan pesan kurir sendiri setelah pesanan dikonfirmasi.\n`);
           }
           msgLines.push(`Tolong dibantu cek ketersediaannya ya Kak. Terima kasih! 🙏`); 
-        msgLines.push(``); // ✨ Tambah baris kosong di sini untuk memisahkan dengan Catatan
-          }
-                  // ✅ SOLUSI NO. 2: Koneksi Link Google Maps Masuk ke dalam Chat Owner
+          
+          msgLines.push(``);
+
+          // ✅ SOLUSI NO. 2: Koneksi Link Google Maps Masuk ke dalam Chat Owner
           if ((method === 'pickup' || method === 'ojol') && settings.gmaps_url) {
             msgLines.push(`*📍 Maps Lokasi Toko:* ${settings.gmaps_url}`);
           }
