@@ -2712,11 +2712,6 @@
             msgLines.push(`▫️ *Alamat Kirim:* ${addr}`);
           }
   
-          // ✅ SOLUSI NO. 2: Koneksi Link Google Maps Masuk ke dalam Chat Owner
-          if ((method === 'pickup' || method === 'ojol') && settings.gmaps_url) {
-            msgLines.push(`▫️ *Maps Lokasi Toko:* ${settings.gmaps_url}`);
-          }
-  
           msgLines.push(`▫️ *Catatan:* ${notes || '-'}`);
           msgLines.push(``);
   
@@ -2724,6 +2719,11 @@
             msgLines.push(`⚠️ Saya akan pesan kurir sendiri setelah pesanan dikonfirmasi.\n`);
           }
           msgLines.push(`Tolong dibantu cek ketersediaannya ya Kak. Terima kasih! 🙏`);
+
+                  // ✅ SOLUSI NO. 2: Koneksi Link Google Maps Masuk ke dalam Chat Owner
+          if ((method === 'pickup' || method === 'ojol') && settings.gmaps_url) {
+            msgLines.push(`*Maps Lokasi Toko:* ${settings.gmaps_url}`);
+          }
   
           // Gabungkan seluruh baris pesan
           const msg = msgLines.join('\n');
